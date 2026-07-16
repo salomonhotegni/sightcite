@@ -1,23 +1,8 @@
 from pathlib import Path
 
-import pymupdf
 import pytest
 
 from sightcite.ingestion import render_pdf
-
-
-@pytest.fixture
-def sample_pdf(tmp_path: Path) -> Path:
-    pdf_path = tmp_path / "sample.pdf"
-
-    with pymupdf.open() as document:  # type: ignore[no-untyped-call]
-        for text in ("First page", "Second page"):
-            page = document.new_page(width=300, height=200)
-            page.insert_text((72, 72), text)
-
-        document.save(pdf_path)
-
-    return pdf_path
 
 
 def test_render_pdf_creates_one_image_per_page(
