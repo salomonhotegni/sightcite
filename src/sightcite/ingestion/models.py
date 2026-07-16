@@ -12,3 +12,11 @@ class RenderedPage:
     image_path: Path
     width: int
     height: int
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractedPage:
+    """Native text extracted from one PDF page."""
+
+    page_number: int
+    text: str
