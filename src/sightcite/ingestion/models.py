@@ -20,3 +20,14 @@ class ExtractedPage:
 
     page_number: int
     text: str
+
+
+@dataclass(frozen=True, slots=True)
+class TextChunk:
+    """Retrieval-ready text from one PDF page."""
+
+    page_number: int
+    chunk_index: int
+    text: str
+    start_word: int
+    end_word: int
