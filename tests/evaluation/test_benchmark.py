@@ -1,0 +1,110 @@
+import json
+from collections.abc import Sequence
+from pathlib import Path
+
+import numpy as np
+import numpy.typing as npt
+import pytest
+
+from sightcite.evaluation import (
+    RetrievalBenchmark,
+    RetrievalExample,
+    run_text_retrieval_benchmark,
+    write_benchmark_report,
+)
+
+
+class BenchmarkEmbedder:
+    """Deterministic embedder for benchmark tests."""
+
+    @property
+    def dimension(self) -> int:
+        return 2
+
+    def embed_documents(
+        self,
+        texts: Sequence[str],
+    ) -> npt.NDArray[np.float64]:
+        vectors = [[1.0, 0.0] if "First" in text else [0.0, 1.0] for text in texts]
+        return np.asarray(vectors, dtype=np.float64)
+
+    def embed_query(self, query: str) -> npt.NDArray[np.float64]:
+        if "first" in query.lower():
+            return np.asarray([1.0, 0.0], dtype=np.float64)
+
+        return np.asarray([0.0, 1.0], dtype=np.float64)
+
+
+def make_benchmark(sample_pdf: Path) -> RetrievalBenchmark:
+    return RetrievalBenchmark(
+        schema_version=1,
+        document_id="sample-paper",
+        pdf_path=sample_pdf,
+        examples=(
+            RetrievalExample(
+                query_id="q1",
+                query="What is on the first page?",
+                relevant_pages=frozenset({1}),
+            ),
+            RetrievalExample(
+                query_id="q2",
+                query="What is on the second page?",
+                relevant_pages=frozenset({2}),
+            ),
+        ),
+    )
+
+
+def test_run_text_retrieval_benchmark(
+    sample_pdf: Path,
+) -> None:
+    result = run_text_retrieval_benchmark(
+        make_benchmark(sample_pdf),
+        BenchmarkEmbedder(),
+        system_name="test-text",
+    )
+
+    assert result.system_name == "test-text"
+    assert result.document_id == "sample-paper"
+    assert result.pdf_path == sample_pdf
+
+    assert result.evaluation.metrics.query_count == 2
+    assert result.evaluation.metrics.recall_at_1 == 1.0
+    assert result.evaluation.metrics.recall_at_3 == 1.0
+    assert result.evaluation.metrics.recall_at_5 == 1.0
+    assert result.evaluation.metrics.mean_reciprocal_rank == 1.0
+
+
+def test_write_benchmark_report(
+    sample_pdf: Path,
+    tmp_path: Path,
+) -> None:
+    result = run_text_retrieval_benchmark(
+        make_benchmark(sample_pdf),
+        BenchmarkEmbedder(),
+    )
+    output_path = tmp_path / "nested" / "report.json"
+
+    returned_path = write_benchmark_report(result, output_path)
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert returned_path == output_path
+    assert payload["schema_version"] == 1
+    assert payload["system_name"] == "bge-text"
+    assert payload["document_id"] == "sample-paper"
+    assert payload["metrics"]["recall_at_1"] == 1.0
+    assert payload["metrics"]["mean_reciprocal_rank"] == 1.0
+    assert payload["queries"][0]["query_id"] == "q1"
+    assert payload["queries"][0]["relevant_pages"] == [1]
+    assert payload["queries"][0]["retrieved_pages"] == [1, 2]
+
+
+def test_benchmark_result_rejects_blank_system_name(
+    sample_pdf: Path,
+) -> None:
+    with pytest.raises(ValueError, match="system_name must not be blank"):
+        run_text_retrieval_benchmark(
+            make_benchmark(sample_pdf),
+            BenchmarkEmbedder(),
+            system_name=" ",
+        )
