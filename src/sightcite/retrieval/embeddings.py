@@ -34,7 +34,7 @@ class TextEmbedder(Protocol):
 class SentenceEncoderBackend(Protocol):
     """Subset of SentenceTransformer used by SightCite."""
 
-    def get_sentence_embedding_dimension(self) -> int | None:
+    def get_embedding_dimension(self) -> int | None:
         """Return the model embedding dimension."""
         ...
 
@@ -69,7 +69,7 @@ class BgeTextEmbedder:
             loaded_model = SentenceTransformer(model_name, device=device)
             backend = cast(SentenceEncoderBackend, loaded_model)
 
-        dimension = backend.get_sentence_embedding_dimension()
+        dimension = backend.get_embedding_dimension()
 
         if dimension is None or dimension <= 0:
             raise ValueError("embedding model must report a positive dimension")
