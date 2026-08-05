@@ -151,9 +151,17 @@ def test_benchmark_command_rejects_missing_dataset(
         ("--chunk-size", "0", "value must be greater than zero"),
         ("--batch-size", "-1", "value must be greater than zero"),
         ("--overlap", "-1", "value must not be negative"),
+        ("--ocr-min-native-chars", "-1", "value must not be negative"),
+        ("--ocr-dpi", "0", "value must be greater than zero"),
+        (
+            "--ocr-page-segmentation-mode",
+            "14",
+            "value must be between 0 and 13",
+        ),
+        ("--ocr-timeout", "0", "value must be greater than zero"),
     ],
 )
-def test_benchmark_command_rejects_invalid_integer_option(
+def test_benchmark_command_rejects_invalid_numeric_option(
     option: str,
     value: str,
     message: str,
@@ -174,3 +182,91 @@ def test_benchmark_command_rejects_invalid_integer_option(
 
     assert error.value.code == 2
     assert message in capsys.readouterr().err
+
+
+def test_benchmark_command_supports_ocr(
+    blank_pdf: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_path = tmp_path / "ocr-benchmark.json"
+    report_path = tmp_path / "ocr-report.json"
+    ocr_output_dir = tmp_path / "ocr-pages"
+
+    dataset_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "document_id": "scanned-paper",
+                "pdf_path": blank_pdf.name,
+                "questions": [
+                    {
+                        "query_id": "q1",
+                        "query": "What is on the first page?",
+                        "relevant_pages": [1],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    captured: dict[str, object] = {}
+
+    class FakeTesseractOcrBackend:
+        def __init__(
+            self,
+            *,
+            language: str,
+            page_segmentation_mode: int,
+            timeout_seconds: float,
+        ) -> None:
+            captured["configuration"] = (
+                language,
+                page_segmentation_mode,
+                timeout_seconds,
+            )
+
+        def extract_text(self, image_path: Path) -> str:
+            captured["image_path"] = image_path
+            return "First page recovered with OCR"
+
+    monkeypatch.setattr(cli, "BgeTextEmbedder", FakeBgeTextEmbedder)
+    monkeypatch.setattr(
+        cli,
+        "TesseractOcrBackend",
+        FakeTesseractOcrBackend,
+    )
+
+    exit_code = cli.main(
+        [
+            "benchmark",
+            str(dataset_path),
+            "--output",
+            str(report_path),
+            "--ocr",
+            "--ocr-language",
+            "fra",
+            "--ocr-page-segmentation-mode",
+            "6",
+            "--ocr-timeout",
+            "12.5",
+            "--ocr-min-native-chars",
+            "25",
+            "--ocr-dpi",
+            "200",
+            "--ocr-output-dir",
+            str(ocr_output_dir),
+        ]
+    )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    image_path = captured["image_path"]
+
+    assert exit_code == 0
+    assert captured["configuration"] == ("fra", 6, 12.5)
+    assert isinstance(image_path, Path)
+    assert image_path.parent == ocr_output_dir
+    assert image_path.is_file()
+    assert report["system_name"] == "bge-text-ocr"
+    assert report["metrics"]["recall_at_1"] == 1.0

@@ -35,6 +35,16 @@ class BenchmarkEmbedder:
         return np.asarray([0.0, 1.0], dtype=np.float64)
 
 
+class FakeOcrBackend:
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.calls: list[Path] = []
+
+    def extract_text(self, image_path: Path) -> str:
+        self.calls.append(image_path)
+        return self.text
+
+
 def make_benchmark(sample_pdf: Path) -> RetrievalBenchmark:
     return RetrievalBenchmark(
         schema_version=1,
@@ -50,6 +60,21 @@ def make_benchmark(sample_pdf: Path) -> RetrievalBenchmark:
                 query_id="q2",
                 query="What is on the second page?",
                 relevant_pages=frozenset({2}),
+            ),
+        ),
+    )
+
+
+def make_blank_benchmark(blank_pdf: Path) -> RetrievalBenchmark:
+    return RetrievalBenchmark(
+        schema_version=1,
+        document_id="scanned-paper",
+        pdf_path=blank_pdf,
+        examples=(
+            RetrievalExample(
+                query_id="q1",
+                query="What was recovered?",
+                relevant_pages=frozenset({1}),
             ),
         ),
     )
@@ -108,3 +133,28 @@ def test_benchmark_result_rejects_blank_system_name(
             BenchmarkEmbedder(),
             system_name=" ",
         )
+
+
+def test_run_text_retrieval_benchmark_with_ocr(
+    blank_pdf: Path,
+    tmp_path: Path,
+) -> None:
+    backend = FakeOcrBackend("Text recovered from scanned paper")
+    output_dir = tmp_path / "ocr-pages"
+
+    result = run_text_retrieval_benchmark(
+        make_blank_benchmark(blank_pdf),
+        BenchmarkEmbedder(),
+        system_name="bge-text-ocr",
+        ocr_backend=backend,
+        ocr_output_dir=output_dir,
+        min_native_chars=25,
+        ocr_dpi=200,
+    )
+
+    assert result.system_name == "bge-text-ocr"
+    assert result.evaluation.metrics.query_count == 1
+    assert result.evaluation.metrics.recall_at_1 == 1.0
+    assert len(backend.calls) == 1
+    assert backend.calls[0].parent == output_dir
+    assert backend.calls[0].is_file()
