@@ -1,18 +1,21 @@
-"""End-to-end native-text retrieval pipeline."""
+"""End-to-end text retrieval pipeline."""
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from sightcite.ingestion import (
     ExtractedPage,
+    OcrBackend,
     TextChunk,
     chunk_extracted_pages,
     extract_pdf_text,
+    extract_pdf_text_with_ocr,
 )
 from sightcite.retrieval import SearchResult, TextEmbedder, TextRetriever
 
 
 class TextRetrievalPipeline:
-    """Index and search the native text embedded in one PDF."""
+    """Index and search text extracted from one PDF."""
 
     def __init__(
         self,
@@ -21,9 +24,33 @@ class TextRetrievalPipeline:
         *,
         chunk_size: int = 200,
         overlap: int = 40,
+        ocr_backend: OcrBackend | None = None,
+        ocr_output_dir: str | Path | None = None,
+        min_native_chars: int = 20,
+        ocr_dpi: int = 144,
     ) -> None:
         source = Path(pdf_path)
-        pages = extract_pdf_text(source)
+
+        if ocr_backend is None:
+            pages = extract_pdf_text(source)
+        elif ocr_output_dir is not None:
+            pages = extract_pdf_text_with_ocr(
+                source,
+                ocr_output_dir,
+                ocr_backend,
+                min_native_chars=min_native_chars,
+                dpi=ocr_dpi,
+            )
+        else:
+            with TemporaryDirectory(prefix="sightcite-ocr-") as temporary_dir:
+                pages = extract_pdf_text_with_ocr(
+                    source,
+                    temporary_dir,
+                    ocr_backend,
+                    min_native_chars=min_native_chars,
+                    dpi=ocr_dpi,
+                )
+
         chunks = chunk_extracted_pages(
             pages,
             chunk_size=chunk_size,
@@ -31,7 +58,7 @@ class TextRetrievalPipeline:
         )
 
         if not chunks:
-            raise ValueError("PDF contains no extractable native text; OCR may be required")
+            raise ValueError("PDF contains no extractable text")
 
         self._source = source
         self._pages = tuple(pages)
