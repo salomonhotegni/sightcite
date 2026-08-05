@@ -1,10 +1,13 @@
 """End-to-end retrieval benchmark execution."""
 
+from pathlib import Path
+
 from sightcite.evaluation.models import (
     BenchmarkResult,
     RetrievalBenchmark,
 )
 from sightcite.evaluation.retrieval import evaluate_retrieval
+from sightcite.ingestion import OcrBackend
 from sightcite.pipelines import TextRetrievalPipeline
 from sightcite.retrieval import TextEmbedder
 
@@ -16,13 +19,21 @@ def run_text_retrieval_benchmark(
     system_name: str = "bge-text",
     chunk_size: int = 200,
     overlap: int = 40,
+    ocr_backend: OcrBackend | None = None,
+    ocr_output_dir: str | Path | None = None,
+    min_native_chars: int = 20,
+    ocr_dpi: int = 144,
 ) -> BenchmarkResult:
-    """Run a page-retrieval benchmark with the native-text pipeline."""
+    """Run a page-retrieval benchmark with the text pipeline."""
     pipeline = TextRetrievalPipeline(
         benchmark.pdf_path,
         embedder,
         chunk_size=chunk_size,
         overlap=overlap,
+        ocr_backend=ocr_backend,
+        ocr_output_dir=ocr_output_dir,
+        min_native_chars=min_native_chars,
+        ocr_dpi=ocr_dpi,
     )
 
     def rank_pages(query: str) -> list[int]:
