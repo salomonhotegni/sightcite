@@ -1,6 +1,7 @@
 """Evaluation data models."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,3 +57,45 @@ class RetrievalEvaluation:
 
     metrics: RetrievalMetrics
     queries: tuple[QueryRetrievalEvaluation, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalBenchmark:
+    """Questions and page annotations for one PDF."""
+
+    schema_version: int
+    document_id: str
+    pdf_path: Path
+    examples: tuple[RetrievalExample, ...]
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise ValueError("unsupported benchmark schema version")
+
+        if not self.document_id.strip():
+            raise ValueError("document_id must not be blank")
+
+        if not self.pdf_path.is_file():
+            raise FileNotFoundError(f"benchmark PDF does not exist: {self.pdf_path}")
+
+        if not self.examples:
+            raise ValueError("benchmark must contain at least one question")
+
+        query_ids = [example.query_id for example in self.examples]
+
+        if len(query_ids) != len(set(query_ids)):
+            raise ValueError("benchmark query IDs must be unique")
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkResult:
+    """Results from evaluating one retrieval system on one document."""
+
+    system_name: str
+    document_id: str
+    pdf_path: Path
+    evaluation: RetrievalEvaluation
+
+    def __post_init__(self) -> None:
+        if not self.system_name.strip():
+            raise ValueError("system_name must not be blank")
