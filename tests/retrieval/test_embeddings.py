@@ -15,7 +15,7 @@ class FakeBackend:
         self.output = output
         self.calls: list[list[str]] = []
 
-    def get_sentence_embedding_dimension(self) -> int | None:
+    def get_embedding_dimension(self) -> int | None:
         return self.dimension
 
     def encode(

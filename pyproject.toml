@@ -15,7 +15,7 @@ authors = [
 dependencies = [
     "numpy>=1.26,<2.4",
     "PyMuPDF>=1.24,<2",
-    "sentence-transformers>=5.2,<6",
+    "sentence-transformers>=5.4,<6",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +37,9 @@ addopts = [
     "--cov-report=term-missing",
 ]
 testpaths = ["tests"]
+markers = [
+    "model: tests that load or download machine-learning model weights",
+]
 
 [tool.coverage.run]
 branch = true

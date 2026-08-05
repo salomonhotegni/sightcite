@@ -12,7 +12,6 @@ class FakeEmbedder:
     def dimension(self) -> int:
         return 2
 
-
     def embed_documents(
         self,
         texts: Sequence[str],
