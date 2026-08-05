@@ -5,6 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
+from sightcite.ingestion import ExtractionSource
 from sightcite.pipelines import TextRetrievalPipeline
 
 
@@ -27,6 +28,16 @@ class KeywordEmbedder:
             return np.asarray([0.0, 1.0], dtype=np.float64)
 
         return np.asarray([1.0, 0.0], dtype=np.float64)
+
+
+class FakeOcrBackend:
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.calls: list[Path] = []
+
+    def extract_text(self, image_path: Path) -> str:
+        self.calls.append(image_path)
+        return self.text
 
 
 def test_text_pipeline_indexes_and_searches_pdf(sample_pdf: Path) -> None:
@@ -56,7 +67,7 @@ def test_text_pipeline_rejects_pdf_without_native_text(
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="OCR may be required",
+        match="PDF contains no extractable text",
     ):
         TextRetrievalPipeline(blank_pdf, KeywordEmbedder())
 
@@ -65,3 +76,56 @@ def test_text_pipeline_accepts_string_path(sample_pdf: Path) -> None:
     pipeline = TextRetrievalPipeline(str(sample_pdf), KeywordEmbedder())
 
     assert pipeline.source == sample_pdf
+
+
+def test_text_pipeline_indexes_ocr_text(
+    blank_pdf: Path,
+    tmp_path: Path,
+) -> None:
+    backend = FakeOcrBackend("Text recovered from scanned page")
+
+    pipeline = TextRetrievalPipeline(
+        blank_pdf,
+        KeywordEmbedder(),
+        ocr_backend=backend,
+        ocr_output_dir=tmp_path / "rendered",
+    )
+
+    assert pipeline.page_count == 1
+    assert pipeline.chunk_count == 1
+    assert pipeline.pages[0].text == "Text recovered from scanned page"
+    assert pipeline.pages[0].source is ExtractionSource.OCR
+    assert len(backend.calls) == 1
+    assert backend.calls[0].is_file()
+
+
+def test_text_pipeline_uses_temporary_ocr_images(
+    blank_pdf: Path,
+) -> None:
+    backend = FakeOcrBackend("Temporary OCR text")
+
+    pipeline = TextRetrievalPipeline(
+        blank_pdf,
+        KeywordEmbedder(),
+        ocr_backend=backend,
+    )
+
+    assert pipeline.pages[0].source is ExtractionSource.OCR
+    assert len(backend.calls) == 1
+    assert not backend.calls[0].exists()
+
+
+def test_text_pipeline_rejects_empty_ocr_result(
+    blank_pdf: Path,
+) -> None:
+    backend = FakeOcrBackend("   ")
+
+    with pytest.raises(
+        ValueError,
+        match="PDF contains no extractable text",
+    ):
+        TextRetrievalPipeline(
+            blank_pdf,
+            KeywordEmbedder(),
+            ocr_backend=backend,
+        )
