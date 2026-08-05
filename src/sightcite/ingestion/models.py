@@ -1,6 +1,7 @@
 """Data models produced by document ingestion."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 
@@ -14,12 +15,20 @@ class RenderedPage:
     height: int
 
 
+class ExtractionSource(StrEnum):
+    """Method that produced a page's final text."""
+
+    NATIVE = "native"
+    OCR = "ocr"
+
+
 @dataclass(frozen=True, slots=True)
 class ExtractedPage:
-    """Native text extracted from one PDF page."""
+    """Text extracted from one PDF page."""
 
     page_number: int
     text: str
+    source: ExtractionSource = ExtractionSource.NATIVE
 
 
 @dataclass(frozen=True, slots=True)
