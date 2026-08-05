@@ -9,6 +9,7 @@ from sightcite.ingestion.models import (
 )
 from sightcite.ingestion.ocr import OcrBackend, extract_pdf_text_with_ocr
 from sightcite.ingestion.pdf import render_pdf
+from sightcite.ingestion.tesseract import TesseractOcrBackend
 from sightcite.ingestion.text import extract_pdf_text
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "ExtractionSource",
     "OcrBackend",
     "RenderedPage",
+    "TesseractOcrBackend",
     "TextChunk",
     "chunk_extracted_pages",
     "extract_pdf_text",
