@@ -29,6 +29,25 @@ for result in pipeline.search("What is the main contribution?", top_k=3):
 The current text baseline requires PDFs containing embedded text. OCR support for
 scanned pages is planned.
 
+## Retrieval benchmark CLI
+
+Run a versioned page-retrieval benchmark:
+
+```bash
+sightcite benchmark benchmark.json \
+  --output reports/text-retrieval.json \
+  --device cpu
+```
+
+The command prints Recall@1, Recall@3, Recall@5, and mean reciprocal rank,
+then writes aggregate and per-query results to JSON.
+
+See all options:
+
+```bash
+sightcite benchmark --help
+```
+
 ## Development
 
 SightCite requires Python 3.11.

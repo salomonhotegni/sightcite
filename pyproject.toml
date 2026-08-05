@@ -18,6 +18,9 @@ dependencies = [
     "sentence-transformers>=5.4,<6",
 ]
 
+[project.scripts]
+sightcite = "sightcite.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "mypy>=1.15",
