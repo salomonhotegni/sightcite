@@ -15,7 +15,7 @@ Generate the PDF:
 python scripts/generate_baseline_fixture.py
 ```
 
-Run the native and OCR-assisted baselines:
+Run the native-text, OCR-assisted, and CLIP visual baselines:
 
 ```bash
 python scripts/run_baseline_comparison.py --device cpu
@@ -23,3 +23,7 @@ python scripts/run_baseline_comparison.py --device cpu
 
 The PDF and generated reports are intentionally ignored by Git because they
 are reproducible artifacts.
+
+The comparison writes individual JSON reports for `bge-text`, `bge-text-ocr`,
+and `clip-visual`, plus `comparison.json` containing aggregate metrics and
+deltas relative to the native-text baseline.
