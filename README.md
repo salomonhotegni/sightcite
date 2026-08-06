@@ -63,8 +63,8 @@ sightcite benchmark --help
 ## Reproducible baseline experiment
 
 The synthetic baseline contains two native-text pages and one image-only page.
-It demonstrates the retrieval difference between native extraction and selective
-OCR without requiring an external paper dataset.
+It compares native text, selective OCR, and CLIP visual retrieval without
+requiring an external paper dataset.
 
 Generate the benchmark PDF:
 
@@ -72,23 +72,26 @@ Generate the benchmark PDF:
 python scripts/generate_baseline_fixture.py
 ```
 
-Run both retrieval configurations:
+Run all three retrieval configurations:
 
 ```bash
 python scripts/run_baseline_comparison.py --device cpu
 ```
 
 The experiment writes detailed reports under `examples/baseline/reports/`.
-With the default BGE model, the expected aggregate result is:
+With the default BGE and CLIP models, the expected aggregate result is:
 
 | System | Recall@1 | Recall@3 | Recall@5 | MRR |
 | --- | ---: | ---: | ---: | ---: |
 | `bge-text` | 0.6667 | 0.6667 | 0.6667 | 0.6667 |
 | `bge-text-ocr` | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| `clip-visual` | 0.3333 | 1.0000 | 1.0000 | 0.6111 |
 
 The native system cannot retrieve the image-only microscopy page. Selective
 OCR recovers that page while preserving retrieval performance on the
-native-text pages.
+native-text pages. Generic CLIP retrieves every relevant page within the top
+three, but its lower rank-one accuracy reflects the difficulty of reading small
+scientific text from a resized full-page image.
 
 ## Development
 
