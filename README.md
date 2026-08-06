@@ -26,8 +26,20 @@ for result in pipeline.search("What is the main contribution?", top_k=3):
     print(result.chunk.text)
 ```
 
-The current text baseline requires PDFs containing embedded text. OCR support for
-scanned pages is planned.
+Native text is used by default. Selective Tesseract OCR can recover text from
+scanned pages while preserving page-level extraction provenance:
+
+```python
+from sightcite.ingestion import TesseractOcrBackend
+from sightcite.pipelines import TextRetrievalPipeline
+from sightcite.retrieval import BgeTextEmbedder
+
+pipeline = TextRetrievalPipeline(
+    "paper.pdf",
+    BgeTextEmbedder(),
+    ocr_backend=TesseractOcrBackend(),
+)
+```
 
 ## Retrieval benchmark CLI
 
@@ -47,6 +59,36 @@ See all options:
 ```bash
 sightcite benchmark --help
 ```
+
+## Reproducible baseline experiment
+
+The synthetic baseline contains two native-text pages and one image-only page.
+It demonstrates the retrieval difference between native extraction and selective
+OCR without requiring an external paper dataset.
+
+Generate the benchmark PDF:
+
+```bash
+python scripts/generate_baseline_fixture.py
+```
+
+Run both retrieval configurations:
+
+```bash
+python scripts/run_baseline_comparison.py --device cpu
+```
+
+The experiment writes detailed reports under `examples/baseline/reports/`.
+With the default BGE model, the expected aggregate result is:
+
+| System | Recall@1 | Recall@3 | Recall@5 | MRR |
+| --- | ---: | ---: | ---: | ---: |
+| `bge-text` | 0.6667 | 0.6667 | 0.6667 | 0.6667 |
+| `bge-text-ocr` | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+
+The native system cannot retrieve the image-only microscopy page. Selective
+OCR recovers that page while preserving retrieval performance on the
+native-text pages.
 
 ## Development
 
@@ -71,4 +113,10 @@ Run the opt-in real-model smoke test:
 
 ```bash
 SIGHTCITE_RUN_MODEL_TESTS=1 pytest -m model -v --no-cov
+```
+
+Run the opt-in real-Tesseract smoke test:
+
+```bash
+SIGHTCITE_RUN_OCR_TESTS=1 pytest -m ocr -v --no-cov
 ```

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "document_id": "sightcite-synthetic-scientific-paper",
+  "pdf_path": "scientific-paper.pdf",
+  "questions": [
+    {
+      "query_id": "photovoltaic-efficiency",
+      "query": "What power conversion efficiency did the perovskite solar cells reach?",
+      "relevant_pages": [1]
+    },
+    {
+      "query_id": "graphene-spacing",
+      "query": "What graphene lattice spacing was observed with electron microscopy?",
+      "relevant_pages": [2]
+    },
+    {
+      "query_id": "battery-retention",
+      "query": "How much capacity did the lithium sulfur battery retain after 500 cycles?",
+      "relevant_pages": [3]
+    }
+  ]
+}
