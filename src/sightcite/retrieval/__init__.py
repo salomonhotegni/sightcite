@@ -9,6 +9,7 @@ from sightcite.retrieval.embeddings import (
 from sightcite.retrieval.index import TextVectorIndex
 from sightcite.retrieval.models import SearchResult
 from sightcite.retrieval.text import TextRetriever
+from sightcite.retrieval.visual_embeddings import VisualEmbedder
 
 __all__ = [
     "BGE_QUERY_INSTRUCTION",
@@ -18,4 +19,5 @@ __all__ = [
     "TextEmbedder",
     "TextRetriever",
     "TextVectorIndex",
+    "VisualEmbedder",
 ]

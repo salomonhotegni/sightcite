@@ -7,6 +7,11 @@ import numpy as np
 import numpy.typing as npt
 from sentence_transformers import SentenceTransformer
 
+from sightcite.retrieval._validation import (
+    require_positive_dimension,
+    validate_embedding_matrix,
+)
+
 DEFAULT_BGE_MODEL = "BAAI/bge-small-en-v1.5"
 BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 
@@ -69,10 +74,7 @@ class BgeTextEmbedder:
             loaded_model = SentenceTransformer(model_name, device=device)
             backend = cast(SentenceEncoderBackend, loaded_model)
 
-        dimension = backend.get_embedding_dimension()
-
-        if dimension is None or dimension <= 0:
-            raise ValueError("embedding model must report a positive dimension")
+        dimension = require_positive_dimension(backend.get_embedding_dimension())
 
         self._backend = backend
         self._batch_size = batch_size
@@ -117,16 +119,8 @@ class BgeTextEmbedder:
             convert_to_numpy=True,
             show_progress_bar=False,
         )
-        matrix = np.asarray(encoded, dtype=np.float64)
-
-        expected_shape = (len(texts), self.dimension)
-
-        if matrix.shape != expected_shape:
-            raise ValueError(
-                f"embedding model returned shape {matrix.shape}; expected {expected_shape}"
-            )
-
-        if not np.all(np.isfinite(matrix)):
-            raise ValueError("embedding model returned non-finite values")
-
-        return matrix
+        return validate_embedding_matrix(
+            encoded,
+            row_count=len(texts),
+            dimension=self.dimension,
+        )
