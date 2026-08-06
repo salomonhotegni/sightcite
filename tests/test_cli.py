@@ -41,6 +41,53 @@ class FakeBgeTextEmbedder:
         return np.asarray([0.0, 1.0], dtype=np.float64)
 
 
+class FakeClipVisualEmbedder:
+    """Deterministic replacement for the CLI CLIP model."""
+
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        device: str | None,
+        batch_size: int,
+    ) -> None:
+        self.model_name = model_name
+        self.device = device
+        self.batch_size = batch_size
+
+    @property
+    def dimension(self) -> int:
+        return 2
+
+    def embed_images(
+        self,
+        image_paths: Sequence[Path],
+    ) -> npt.NDArray[np.float64]:
+        vectors = {
+            "page_0001.png": [1.0, 0.0],
+            "page_0002.png": [0.0, 1.0],
+        }
+        return np.asarray(
+            [vectors[path.name] for path in image_paths],
+            dtype=np.float64,
+        )
+
+    def embed_query(
+        self,
+        query: str,
+    ) -> npt.NDArray[np.float64]:
+        if "first" in query.lower():
+            return np.asarray(
+                [1.0, 0.0],
+                dtype=np.float64,
+            )
+
+        return np.asarray(
+            [0.0, 1.0],
+            dtype=np.float64,
+        )
+
+
 def write_benchmark_dataset(path: Path) -> None:
     payload = {
         "schema_version": 1,
@@ -159,6 +206,7 @@ def test_benchmark_command_rejects_missing_dataset(
             "value must be between 0 and 13",
         ),
         ("--ocr-timeout", "0", "value must be greater than zero"),
+        ("--visual-dpi", "0", "value must be greater than zero"),
     ],
 )
 def test_benchmark_command_rejects_invalid_numeric_option(
@@ -270,3 +318,68 @@ def test_benchmark_command_supports_ocr(
     assert image_path.is_file()
     assert report["system_name"] == "bge-text-ocr"
     assert report["metrics"]["recall_at_1"] == 1.0
+
+
+def test_benchmark_command_supports_visual_retrieval(
+    sample_pdf: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_path = tmp_path / "benchmark.json"
+    report_path = tmp_path / "visual-report.json"
+    output_dir = tmp_path / "visual-pages"
+    write_benchmark_dataset(dataset_path)
+
+    monkeypatch.setattr(
+        cli,
+        "ClipVisualEmbedder",
+        FakeClipVisualEmbedder,
+    )
+
+    exit_code = cli.main(
+        [
+            "benchmark",
+            str(dataset_path),
+            "--output",
+            str(report_path),
+            "--visual",
+            "--model",
+            "test-clip",
+            "--device",
+            "cpu",
+            "--batch-size",
+            "4",
+            "--visual-dpi",
+            "100",
+            "--visual-output-dir",
+            str(output_dir),
+        ]
+    )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert report["system_name"] == "clip-visual"
+    assert report["metrics"]["recall_at_1"] == 1.0
+    assert (output_dir / "page_0001.png").is_file()
+    assert (output_dir / "page_0002.png").is_file()
+
+
+def test_benchmark_command_rejects_ocr_and_visual_together(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "benchmark",
+                "benchmark.json",
+                "--output",
+                str(tmp_path / "report.json"),
+                "--ocr",
+                "--visual",
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err

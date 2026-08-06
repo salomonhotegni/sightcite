@@ -8,10 +8,16 @@ from typing import cast
 from sightcite.evaluation import (
     load_retrieval_benchmark,
     run_text_retrieval_benchmark,
+    run_visual_retrieval_benchmark,
     write_benchmark_report,
 )
 from sightcite.ingestion import TesseractOcrBackend
-from sightcite.retrieval import DEFAULT_BGE_MODEL, BgeTextEmbedder
+from sightcite.retrieval import (
+    DEFAULT_BGE_MODEL,
+    DEFAULT_CLIP_MODEL,
+    BgeTextEmbedder,
+    ClipVisualEmbedder,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,8 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     benchmark_parser.add_argument(
         "--model",
-        default=DEFAULT_BGE_MODEL,
-        help="Sentence Transformers model name.",
+        default=None,
+        help=(
+            "Embedding model name. Defaults to the BGE or CLIP "
+            "baseline according to retrieval mode."
+        ),
     )
     benchmark_parser.add_argument(
         "--device",
@@ -52,8 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--system-name",
         default=None,
         help=(
-            "System name recorded in the report. Defaults to bge-text "
-            "or bge-text-ocr according to the extraction mode."
+            "System name recorded in the report. Defaults to bge-text, "
+            "bge-text-ocr, or clip-visual according to retrieval mode."
         ),
     )
     benchmark_parser.add_argument(
@@ -71,13 +80,30 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument(
         "--batch-size",
         type=_positive_integer,
-        default=32,
-        help="Embedding batch size.",
+        default=None,
+        help=("Embedding batch size. Defaults to 32 for text and 16 for visual retrieval."),
     )
-    benchmark_parser.add_argument(
+    retrieval_mode = benchmark_parser.add_mutually_exclusive_group()
+    retrieval_mode.add_argument(
         "--ocr",
         action="store_true",
         help="Apply Tesseract OCR to pages with insufficient native text.",
+    )
+    retrieval_mode.add_argument(
+        "--visual",
+        action="store_true",
+        help="Retrieve rendered pages using CLIP visual embeddings.",
+    )
+    benchmark_parser.add_argument(
+        "--visual-dpi",
+        type=_positive_integer,
+        default=144,
+        help="PDF rendering resolution for visual retrieval.",
+    )
+    benchmark_parser.add_argument(
+        "--visual-output-dir",
+        default=None,
+        help="Optional directory in which rendered visual pages are retained.",
     )
     benchmark_parser.add_argument(
         "--ocr-language",
@@ -135,13 +161,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _run_benchmark(arguments: argparse.Namespace) -> int:
     dataset_path = Path(cast(str, arguments.dataset))
     output_path = Path(cast(str, arguments.output))
-    model_name = cast(str, arguments.model)
+    requested_model_name = cast(str | None, arguments.model)
     device = cast(str | None, arguments.device)
     requested_system_name = cast(str | None, arguments.system_name)
     chunk_size = cast(int, arguments.chunk_size)
     overlap = cast(int, arguments.overlap)
-    batch_size = cast(int, arguments.batch_size)
+    requested_batch_size = cast(int | None, arguments.batch_size)
     use_ocr = cast(bool, arguments.ocr)
+    use_visual = cast(bool, arguments.visual)
     ocr_language = cast(str, arguments.ocr_language)
     ocr_page_segmentation_mode = cast(
         int,
@@ -151,9 +178,26 @@ def _run_benchmark(arguments: argparse.Namespace) -> int:
     ocr_min_native_chars = cast(int, arguments.ocr_min_native_chars)
     ocr_dpi = cast(int, arguments.ocr_dpi)
     ocr_output_dir_value = cast(str | None, arguments.ocr_output_dir)
+    visual_dpi = cast(int, arguments.visual_dpi)
+    visual_output_dir_value = cast(
+        str | None,
+        arguments.visual_output_dir,
+    )
 
-    system_name = requested_system_name or ("bge-text-ocr" if use_ocr else "bge-text")
+    if requested_system_name is not None:
+        system_name = requested_system_name
+    elif use_visual:
+        system_name = "clip-visual"
+    elif use_ocr:
+        system_name = "bge-text-ocr"
+    else:
+        system_name = "bge-text"
+    model_name = requested_model_name or (DEFAULT_CLIP_MODEL if use_visual else DEFAULT_BGE_MODEL)
+    batch_size = requested_batch_size or (16 if use_visual else 32)
     ocr_output_dir = Path(ocr_output_dir_value) if ocr_output_dir_value is not None else None
+    visual_output_dir = (
+        Path(visual_output_dir_value) if visual_output_dir_value is not None else None
+    )
     ocr_backend = (
         TesseractOcrBackend(
             language=ocr_language,
@@ -168,22 +212,36 @@ def _run_benchmark(arguments: argparse.Namespace) -> int:
         raise ValueError("overlap must be smaller than chunk-size")
 
     benchmark = load_retrieval_benchmark(dataset_path)
-    embedder = BgeTextEmbedder(
-        model_name,
-        device=device,
-        batch_size=batch_size,
-    )
-    result = run_text_retrieval_benchmark(
-        benchmark,
-        embedder,
-        system_name=system_name,
-        chunk_size=chunk_size,
-        overlap=overlap,
-        ocr_backend=ocr_backend,
-        ocr_output_dir=ocr_output_dir,
-        min_native_chars=ocr_min_native_chars,
-        ocr_dpi=ocr_dpi,
-    )
+    if use_visual:
+        visual_embedder = ClipVisualEmbedder(
+            model_name,
+            device=device,
+            batch_size=batch_size,
+        )
+        result = run_visual_retrieval_benchmark(
+            benchmark,
+            visual_embedder,
+            system_name=system_name,
+            output_dir=visual_output_dir,
+            dpi=visual_dpi,
+        )
+    else:
+        text_embedder = BgeTextEmbedder(
+            model_name,
+            device=device,
+            batch_size=batch_size,
+        )
+        result = run_text_retrieval_benchmark(
+            benchmark,
+            text_embedder,
+            system_name=system_name,
+            chunk_size=chunk_size,
+            overlap=overlap,
+            ocr_backend=ocr_backend,
+            ocr_output_dir=ocr_output_dir,
+            min_native_chars=ocr_min_native_chars,
+            ocr_dpi=ocr_dpi,
+        )
     report_path = write_benchmark_report(result, output_path)
     metrics = result.evaluation.metrics
 

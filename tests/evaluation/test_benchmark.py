@@ -10,6 +10,7 @@ from sightcite.evaluation import (
     RetrievalBenchmark,
     RetrievalExample,
     run_text_retrieval_benchmark,
+    run_visual_retrieval_benchmark,
     write_benchmark_report,
 )
 
@@ -33,6 +34,42 @@ class BenchmarkEmbedder:
             return np.asarray([1.0, 0.0], dtype=np.float64)
 
         return np.asarray([0.0, 1.0], dtype=np.float64)
+
+
+class BenchmarkVisualEmbedder:
+    """Deterministic visual embedder for benchmark tests."""
+
+    @property
+    def dimension(self) -> int:
+        return 2
+
+    def embed_images(
+        self,
+        image_paths: Sequence[Path],
+    ) -> npt.NDArray[np.float64]:
+        vectors = {
+            "page_0001.png": [1.0, 0.0],
+            "page_0002.png": [0.0, 1.0],
+        }
+        return np.asarray(
+            [vectors[path.name] for path in image_paths],
+            dtype=np.float64,
+        )
+
+    def embed_query(
+        self,
+        query: str,
+    ) -> npt.NDArray[np.float64]:
+        if "first" in query.lower():
+            return np.asarray(
+                [1.0, 0.0],
+                dtype=np.float64,
+            )
+
+        return np.asarray(
+            [0.0, 1.0],
+            dtype=np.float64,
+        )
 
 
 class FakeOcrBackend:
@@ -158,3 +195,29 @@ def test_run_text_retrieval_benchmark_with_ocr(
     assert len(backend.calls) == 1
     assert backend.calls[0].parent == output_dir
     assert backend.calls[0].is_file()
+
+
+def test_run_visual_retrieval_benchmark(
+    sample_pdf: Path,
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "visual-pages"
+
+    result = run_visual_retrieval_benchmark(
+        make_benchmark(sample_pdf),
+        BenchmarkVisualEmbedder(),
+        system_name="test-visual",
+        output_dir=output_dir,
+        dpi=100,
+    )
+
+    assert result.system_name == "test-visual"
+    assert result.document_id == "sample-paper"
+    assert result.pdf_path == sample_pdf
+    assert result.evaluation.metrics.query_count == 2
+    assert result.evaluation.metrics.recall_at_1 == 1.0
+    assert result.evaluation.metrics.recall_at_3 == 1.0
+    assert result.evaluation.metrics.recall_at_5 == 1.0
+    assert result.evaluation.metrics.mean_reciprocal_rank == 1.0
+    assert (output_dir / "page_0001.png").is_file()
+    assert (output_dir / "page_0002.png").is_file()
