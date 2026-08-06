@@ -1,5 +1,9 @@
 """Text and visual retrieval."""
 
+from sightcite.retrieval.clip import (
+    DEFAULT_CLIP_MODEL,
+    ClipVisualEmbedder,
+)
 from sightcite.retrieval.embeddings import (
     BGE_QUERY_INSTRUCTION,
     DEFAULT_BGE_MODEL,
@@ -14,7 +18,9 @@ from sightcite.retrieval.visual_embeddings import VisualEmbedder
 __all__ = [
     "BGE_QUERY_INSTRUCTION",
     "DEFAULT_BGE_MODEL",
+    "DEFAULT_CLIP_MODEL",
     "BgeTextEmbedder",
+    "ClipVisualEmbedder",
     "SearchResult",
     "TextEmbedder",
     "TextRetriever",
