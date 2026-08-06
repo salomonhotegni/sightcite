@@ -39,3 +39,5 @@ artifacts/
 models/
 outputs/
 *.pdf
+examples/baseline/scientific-paper.pdf
+examples/baseline/reports/
