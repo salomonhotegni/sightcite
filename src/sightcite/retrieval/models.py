@@ -21,3 +21,13 @@ class VisualSearchResult:
     rank: int
     score: float
     page: RenderedPage
+
+
+@dataclass(frozen=True, slots=True)
+class FusedPageResult:
+    """One page ranked by multiple retrieval systems."""
+
+    rank: int
+    score: float
+    page_number: int
+    source_ranks: tuple[tuple[str, int], ...]
