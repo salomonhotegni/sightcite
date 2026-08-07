@@ -10,6 +10,10 @@ from sightcite.retrieval.embeddings import (
     BgeTextEmbedder,
     TextEmbedder,
 )
+from sightcite.retrieval.fusion import (
+    DEFAULT_RRF_CONSTANT,
+    reciprocal_rank_fusion,
+)
 from sightcite.retrieval.index import (
     TextVectorIndex,
     VisualVectorIndex,
@@ -26,8 +30,10 @@ __all__ = [
     "BGE_QUERY_INSTRUCTION",
     "DEFAULT_BGE_MODEL",
     "DEFAULT_CLIP_MODEL",
+    "DEFAULT_RRF_CONSTANT",
     "BgeTextEmbedder",
     "ClipVisualEmbedder",
+    "FusedPageResult",
     "SearchResult",
     "TextEmbedder",
     "TextRetriever",
@@ -36,4 +42,5 @@ __all__ = [
     "VisualRetriever",
     "VisualSearchResult",
     "VisualVectorIndex",
+    "reciprocal_rank_fusion",
 ]
