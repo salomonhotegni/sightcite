@@ -19,6 +19,7 @@ from sightcite.retrieval.index import (
     VisualVectorIndex,
 )
 from sightcite.retrieval.models import (
+    FusedSearchResult,
     SearchResult,
     VisualSearchResult,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "BgeTextEmbedder",
     "ClipVisualEmbedder",
     "FusedPageResult",
+    "FusedSearchResult",
     "SearchResult",
     "TextEmbedder",
     "TextRetriever",

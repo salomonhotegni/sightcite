@@ -31,3 +31,13 @@ class FusedPageResult:
     score: float
     page_number: int
     source_ranks: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FusedSearchResult:
+    """One fused result with its rendered evidence page."""
+
+    rank: int
+    score: float
+    page: RenderedPage
+    source_ranks: tuple[tuple[str, int], ...]
