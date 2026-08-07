@@ -10,6 +10,7 @@ from sightcite.evaluation import (
     run_text_retrieval_benchmark,
     run_visual_retrieval_benchmark,
     write_benchmark_report,
+    run_fused_retrieval_benchmark,
 )
 from sightcite.ingestion import TesseractOcrBackend
 from sightcite.retrieval import (
@@ -81,6 +82,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=144,
         help="PDF rendering resolution for visual retrieval.",
     )
+    parser.add_argument(
+        "--rrf-constant",
+        type=int,
+        default=60,
+        help="Reciprocal Rank Fusion constant.",
+    )
+    parser.add_argument(
+        "--text-weight",
+        type=float,
+        default=1.0,
+        help="Text ranking weight used by fusion.",
+    )
+    parser.add_argument(
+        "--visual-weight",
+        type=float,
+        default=1.0,
+        help="Visual ranking weight used by fusion.",
+    )
     return parser
 
 
@@ -129,6 +148,9 @@ def main() -> None:
     text_batch_size: int = arguments.text_batch_size
     visual_batch_size: int = arguments.visual_batch_size
     visual_dpi: int = arguments.visual_dpi
+    rrf_constant: int = arguments.rrf_constant
+    text_weight: float = arguments.text_weight
+    visual_weight: float = arguments.visual_weight
 
     if text_batch_size <= 0:
         raise ValueError("text-batch-size must be greater than zero")
@@ -138,6 +160,15 @@ def main() -> None:
 
     if visual_dpi <= 0:
         raise ValueError("visual-dpi must be greater than zero")
+
+    if rrf_constant < 0:
+        raise ValueError("rrf-constant must not be negative")
+
+    if text_weight <= 0:
+        raise ValueError("text-weight must be greater than zero")
+
+    if visual_weight <= 0:
+        raise ValueError("visual-weight must be greater than zero")
 
     benchmark = load_retrieval_benchmark(dataset_path)
 
@@ -169,6 +200,16 @@ def main() -> None:
         system_name="clip-visual",
         dpi=visual_dpi,
     )
+    fused_result = run_fused_retrieval_benchmark(
+        benchmark,
+        text_embedder,
+        visual_embedder,
+        system_name="rrf-text-visual",
+        visual_dpi=visual_dpi,
+        rank_constant=rrf_constant,
+        text_weight=text_weight,
+        visual_weight=visual_weight,
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -185,11 +226,16 @@ def main() -> None:
             visual_result,
             output_dir / "clip-visual.json",
         ),
+        "rrf-text-visual": write_benchmark_report(
+            fused_result,
+            output_dir / "rrf-text-visual.json",
+        ),
     }
 
     native_metrics = _metrics_payload(native_result)
     ocr_metrics = _metrics_payload(ocr_result)
     visual_metrics = _metrics_payload(visual_result)
+    fused_metrics = _metrics_payload(fused_result)
 
     comparison = {
         "schema_version": 1,
@@ -198,6 +244,7 @@ def main() -> None:
             "bge-text": native_metrics,
             "bge-text-ocr": ocr_metrics,
             "clip-visual": visual_metrics,
+            "rrf-text-visual": fused_metrics,
         },
         "ocr_minus_native": _metric_deltas(
             native_metrics,
@@ -207,6 +254,15 @@ def main() -> None:
             native_metrics,
             visual_metrics,
         ),
+        "fused_minus_native": _metric_deltas(
+            native_metrics,
+            fused_metrics,
+        ),
+        "fusion_configuration": {
+            "rank_constant": rrf_constant,
+            "text_weight": text_weight,
+            "visual_weight": visual_weight,
+        },
     }
 
     comparison_path = output_dir / "comparison.json"
@@ -229,6 +285,7 @@ def main() -> None:
     _print_metrics("bge-text", native_metrics)
     _print_metrics("bge-text-ocr", ocr_metrics)
     _print_metrics("clip-visual", visual_metrics)
+    _print_metrics("rrf-text-visual", fused_metrics)
 
 
 if __name__ == "__main__":
