@@ -9,6 +9,7 @@ import pytest
 from sightcite.evaluation import (
     RetrievalBenchmark,
     RetrievalExample,
+    run_fused_retrieval_benchmark,
     run_text_retrieval_benchmark,
     run_visual_retrieval_benchmark,
     write_benchmark_report,
@@ -212,6 +213,36 @@ def test_run_visual_retrieval_benchmark(
     )
 
     assert result.system_name == "test-visual"
+    assert result.document_id == "sample-paper"
+    assert result.pdf_path == sample_pdf
+    assert result.evaluation.metrics.query_count == 2
+    assert result.evaluation.metrics.recall_at_1 == 1.0
+    assert result.evaluation.metrics.recall_at_3 == 1.0
+    assert result.evaluation.metrics.recall_at_5 == 1.0
+    assert result.evaluation.metrics.mean_reciprocal_rank == 1.0
+    assert (output_dir / "page_0001.png").is_file()
+    assert (output_dir / "page_0002.png").is_file()
+
+
+def test_run_fused_retrieval_benchmark(
+    sample_pdf: Path,
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "fused-pages"
+
+    result = run_fused_retrieval_benchmark(
+        make_benchmark(sample_pdf),
+        BenchmarkEmbedder(),
+        BenchmarkVisualEmbedder(),
+        system_name="test-fused",
+        visual_output_dir=output_dir,
+        visual_dpi=100,
+        rank_constant=20,
+        text_weight=2.0,
+        visual_weight=1.0,
+    )
+
+    assert result.system_name == "test-fused"
     assert result.document_id == "sample-paper"
     assert result.pdf_path == sample_pdf
     assert result.evaluation.metrics.query_count == 2

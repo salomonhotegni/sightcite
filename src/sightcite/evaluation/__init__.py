@@ -1,6 +1,7 @@
 """SightCite evaluation utilities."""
 
 from sightcite.evaluation.benchmark import (
+    run_fused_retrieval_benchmark,
     run_text_retrieval_benchmark,
     run_visual_retrieval_benchmark,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "RetrievalMetrics",
     "evaluate_retrieval",
     "load_retrieval_benchmark",
+    "run_fused_retrieval_benchmark",
     "run_text_retrieval_benchmark",
     "run_visual_retrieval_benchmark",
     "write_benchmark_report",
