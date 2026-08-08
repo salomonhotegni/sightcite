@@ -7,10 +7,10 @@ from pathlib import Path
 from sightcite.evaluation import (
     BenchmarkResult,
     load_retrieval_benchmark,
+    run_fused_retrieval_benchmark,
     run_text_retrieval_benchmark,
     run_visual_retrieval_benchmark,
     write_benchmark_report,
-    run_fused_retrieval_benchmark,
 )
 from sightcite.ingestion import TesseractOcrBackend
 from sightcite.retrieval import (
