@@ -96,6 +96,24 @@ scientific text from a resized full-page image. Equal-weight reciprocal rank
 fusion preserves the native system's rank-one recall while improving its MRR
 and top-three recall.
 
+## OpenAI grounded answering
+
+SightCite includes an optional OpenAI Responses API backend that sends only
+retrieved page images to a vision-capable model and parses a structured answer
+with explicit PDF page citations. The grounding service rejects citations to
+pages outside the supplied evidence set and supports abstention when the
+evidence is insufficient.
+
+Install the optional backend:
+
+```bash
+python -m pip install --editable ".[openai]"
+```
+
+Set `OPENAI_API_KEY` in the environment before constructing
+`OpenAIVisionLanguageModel`. Do not store API keys in source control. The
+default model is `gpt-5.6-luna` and can be overridden in the constructor.
+
 ## Development
 
 SightCite requires Python 3.11.
@@ -125,4 +143,10 @@ Run the opt-in real-Tesseract smoke test:
 
 ```bash
 SIGHTCITE_RUN_OCR_TESTS=1 pytest -m ocr -v --no-cov
+```
+
+Run the opt-in, billable OpenAI smoke test:
+
+```bash
+SIGHTCITE_RUN_OPENAI_TESTS=1 pytest -m openai -v --no-cov
 ```

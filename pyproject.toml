@@ -23,6 +23,10 @@ dependencies = [
 sightcite = "sightcite.cli:main"
 
 [project.optional-dependencies]
+openai = [
+    "openai>=2,<3",
+    "pydantic>=2.10,<3",
+]
 dev = [
     "mypy>=1.15",
     "pytest>=8.3",
@@ -44,6 +48,7 @@ testpaths = ["tests"]
 markers = [
     "model: tests that load or download machine-learning model weights",
     "ocr: tests that require the external Tesseract OCR executable",
+    "openai: tests that make billable requests to the OpenAI API",
 ]
 
 [tool.coverage.run]
