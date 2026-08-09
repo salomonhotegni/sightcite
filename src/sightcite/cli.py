@@ -5,6 +5,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
+from sightcite.answering import (
+    DEFAULT_OPENAI_VLM_MODEL,
+    GroundedAnswerService,
+    OpenAIVisionLanguageModel,
+)
 from sightcite.evaluation import (
     load_retrieval_benchmark,
     run_text_retrieval_benchmark,
@@ -12,6 +17,11 @@ from sightcite.evaluation import (
     write_benchmark_report,
 )
 from sightcite.ingestion import TesseractOcrBackend
+from sightcite.integrations.langchain import (
+    AnswerRequest,
+    create_grounded_answer_chain,
+)
+from sightcite.pipelines import FusedRetrievalPipeline
 from sightcite.retrieval import (
     DEFAULT_BGE_MODEL,
     DEFAULT_CLIP_MODEL,
@@ -139,6 +149,80 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional directory in which rendered OCR page images are retained.",
     )
+    answer_parser = subparsers.add_parser(
+        "answer",
+        help="Answer a question using retrieved paper pages.",
+    )
+    answer_parser.add_argument(
+        "pdf",
+        help="Path to the scientific-paper PDF.",
+    )
+    answer_parser.add_argument(
+        "question",
+        help="Question to answer from the paper.",
+    )
+    answer_parser.add_argument(
+        "--top-k",
+        type=_positive_integer,
+        default=3,
+        help="Number of retrieved pages supplied as evidence.",
+    )
+    answer_parser.add_argument(
+        "--text-model",
+        default=DEFAULT_BGE_MODEL,
+        help="Sentence Transformers model used for text retrieval.",
+    )
+    answer_parser.add_argument(
+        "--visual-model",
+        default=DEFAULT_CLIP_MODEL,
+        help="CLIP model used for visual retrieval.",
+    )
+    answer_parser.add_argument(
+        "--answer-model",
+        default=DEFAULT_OPENAI_VLM_MODEL,
+        help="OpenAI vision model used to generate the answer.",
+    )
+    answer_parser.add_argument(
+        "--device",
+        default=None,
+        help="Embedding device, such as cpu, cuda, or cuda:0.",
+    )
+    answer_parser.add_argument(
+        "--text-batch-size",
+        type=_positive_integer,
+        default=32,
+        help="Text embedding batch size.",
+    )
+    answer_parser.add_argument(
+        "--visual-batch-size",
+        type=_positive_integer,
+        default=16,
+        help="Visual embedding batch size.",
+    )
+    answer_parser.add_argument(
+        "--chunk-size",
+        type=_positive_integer,
+        default=200,
+        help="Maximum words per text chunk.",
+    )
+    answer_parser.add_argument(
+        "--overlap",
+        type=_non_negative_integer,
+        default=40,
+        help="Words shared by consecutive text chunks.",
+    )
+    answer_parser.add_argument(
+        "--visual-dpi",
+        type=_positive_integer,
+        default=144,
+        help="PDF rendering resolution for visual evidence.",
+    )
+    answer_parser.add_argument(
+        "--image-detail",
+        choices=("auto", "low", "high"),
+        default="high",
+        help="Image detail sent to the OpenAI vision model.",
+    )
 
     return parser
 
@@ -152,6 +236,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if command == "benchmark":
             return _run_benchmark(arguments)
+        if command == "answer":
+            return _run_answer(arguments)
     except (FileNotFoundError, ValueError) as error:
         parser.error(str(error))
 
@@ -252,6 +338,70 @@ def _run_benchmark(arguments: argparse.Namespace) -> int:
     print(f"Recall@5: {metrics.recall_at_5:.4f}")
     print(f"MRR: {metrics.mean_reciprocal_rank:.4f}")
     print(f"Report: {report_path}")
+
+    return 0
+
+
+def _run_answer(arguments: argparse.Namespace) -> int:
+    pdf_path = Path(cast(str, arguments.pdf))
+    question = cast(str, arguments.question)
+    top_k = cast(int, arguments.top_k)
+    text_model = cast(str, arguments.text_model)
+    visual_model = cast(str, arguments.visual_model)
+    answer_model = cast(str, arguments.answer_model)
+    device = cast(str | None, arguments.device)
+    text_batch_size = cast(int, arguments.text_batch_size)
+    visual_batch_size = cast(int, arguments.visual_batch_size)
+    chunk_size = cast(int, arguments.chunk_size)
+    overlap = cast(int, arguments.overlap)
+    visual_dpi = cast(int, arguments.visual_dpi)
+    image_detail = cast(str, arguments.image_detail)
+
+    if overlap >= chunk_size:
+        raise ValueError("overlap must be smaller than chunk-size")
+
+    text_embedder = BgeTextEmbedder(
+        text_model,
+        device=device,
+        batch_size=text_batch_size,
+    )
+    visual_embedder = ClipVisualEmbedder(
+        visual_model,
+        device=device,
+        batch_size=visual_batch_size,
+    )
+    vision_model = OpenAIVisionLanguageModel(
+        answer_model,
+        image_detail=image_detail,
+    )
+    answer_service = GroundedAnswerService(vision_model)
+
+    with FusedRetrievalPipeline(
+        pdf_path,
+        text_embedder,
+        visual_embedder,
+        chunk_size=chunk_size,
+        overlap=overlap,
+        visual_dpi=visual_dpi,
+    ) as retrieval_pipeline:
+        chain = create_grounded_answer_chain(
+            retrieval_pipeline,
+            answer_service,
+        )
+        answer = chain.invoke(
+            AnswerRequest(
+                question=question,
+                top_k=top_k,
+            )
+        )
+
+        print(f"Answer: {answer.text}")
+
+        if answer.abstained:
+            print("Citations: none (insufficient evidence)")
+        else:
+            cited_pages = ", ".join(str(citation.page_number) for citation in answer.citations)
+            print(f"Citations: pages {cited_pages}")
 
     return 0
 
