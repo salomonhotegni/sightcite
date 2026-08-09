@@ -1,12 +1,15 @@
 import json
 from collections.abc import Sequence
 from pathlib import Path
+from types import TracebackType
 
 import numpy as np
 import numpy.typing as npt
 import pytest
 
 from sightcite import cli
+from sightcite.answering import EvidencePage, GroundedAnswer
+from sightcite.integrations.langchain import AnswerRequest
 
 
 class FakeBgeTextEmbedder:
@@ -383,3 +386,184 @@ def test_benchmark_command_rejects_ocr_and_visual_together(
 
     assert error.value.code == 2
     assert "not allowed with argument" in capsys.readouterr().err
+
+
+def test_answer_command_runs_grounded_workflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.touch()
+
+    image_path = tmp_path / "page-2.png"
+    image_path.touch()
+
+    expected_answer = GroundedAnswer(
+        question="What did the experiment show?",
+        text="The experiment showed improved performance.",
+        citations=(
+            EvidencePage(
+                page_number=2,
+                image_path=image_path,
+                retrieval_rank=1,
+                retrieval_score=0.75,
+                source_ranks=(
+                    ("text", 1),
+                    ("visual", 2),
+                ),
+            ),
+        ),
+    )
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIVisionLanguageModel:
+        def __init__(
+            self,
+            model: str,
+            *,
+            image_detail: str,
+        ) -> None:
+            captured["answer_model"] = model
+            captured["image_detail"] = image_detail
+
+    class FakeGroundedAnswerService:
+        def __init__(
+            self,
+            model: object,
+        ) -> None:
+            captured["answer_service_model"] = model
+
+    class FakeFusedRetrievalPipeline:
+        def __init__(
+            self,
+            pdf_path: str | Path,
+            text_embedder: object,
+            visual_embedder: object,
+            **configuration: object,
+        ) -> None:
+            captured["pdf_path"] = Path(pdf_path)
+            captured["text_embedder"] = text_embedder
+            captured["visual_embedder"] = visual_embedder
+            captured["pipeline_configuration"] = configuration
+
+        def __enter__(self) -> "FakeFusedRetrievalPipeline":
+            captured["pipeline_entered"] = True
+            return self
+
+        def __exit__(
+            self,
+            exception_type: type[BaseException] | None,
+            exception: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            captured["pipeline_exited"] = True
+
+    class FakeChain:
+        def invoke(
+            self,
+            request: AnswerRequest,
+        ) -> GroundedAnswer:
+            captured["request"] = request
+            return expected_answer
+
+    def fake_create_grounded_answer_chain(
+        retrieval_pipeline: object,
+        answer_service: object,
+    ) -> FakeChain:
+        captured["chain_retrieval_pipeline"] = retrieval_pipeline
+        captured["chain_answer_service"] = answer_service
+        return FakeChain()
+
+    monkeypatch.setattr(cli, "BgeTextEmbedder", FakeBgeTextEmbedder)
+    monkeypatch.setattr(cli, "ClipVisualEmbedder", FakeClipVisualEmbedder)
+    monkeypatch.setattr(
+        cli,
+        "OpenAIVisionLanguageModel",
+        FakeOpenAIVisionLanguageModel,
+    )
+    monkeypatch.setattr(
+        cli,
+        "GroundedAnswerService",
+        FakeGroundedAnswerService,
+    )
+    monkeypatch.setattr(
+        cli,
+        "FusedRetrievalPipeline",
+        FakeFusedRetrievalPipeline,
+    )
+    monkeypatch.setattr(
+        cli,
+        "create_grounded_answer_chain",
+        fake_create_grounded_answer_chain,
+    )
+
+    exit_code = cli.main(
+        [
+            "answer",
+            str(pdf_path),
+            "What did the experiment show?",
+            "--top-k",
+            "4",
+            "--text-model",
+            "text-model",
+            "--visual-model",
+            "visual-model",
+            "--answer-model",
+            "vision-model",
+            "--device",
+            "cpu",
+            "--text-batch-size",
+            "8",
+            "--visual-batch-size",
+            "6",
+            "--chunk-size",
+            "120",
+            "--overlap",
+            "20",
+            "--visual-dpi",
+            "180",
+            "--image-detail",
+            "low",
+        ]
+    )
+
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert output == ("Answer: The experiment showed improved performance.\nCitations: pages 2\n")
+    assert captured["pdf_path"] == pdf_path
+    assert captured["answer_model"] == "vision-model"
+    assert captured["image_detail"] == "low"
+    assert captured["pipeline_configuration"] == {
+        "chunk_size": 120,
+        "overlap": 20,
+        "visual_dpi": 180,
+    }
+    assert captured["request"] == AnswerRequest(
+        question="What did the experiment show?",
+        top_k=4,
+    )
+    assert captured["pipeline_entered"] is True
+    assert captured["pipeline_exited"] is True
+
+
+def test_answer_command_rejects_large_overlap(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "answer",
+                str(tmp_path / "paper.pdf"),
+                "Question?",
+                "--chunk-size",
+                "10",
+                "--overlap",
+                "10",
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "overlap must be smaller than chunk-size" in capsys.readouterr().err

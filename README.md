@@ -114,6 +114,34 @@ Set `OPENAI_API_KEY` in the environment before constructing
 `OpenAIVisionLanguageModel`. Do not store API keys in source control. The
 default model is `gpt-5.6-luna` and can be overridden in the constructor.
 
+## End-to-end question answering
+
+Install the optional OpenAI and LangChain dependencies:
+
+```bash
+python -m pip install --editable ".[openai,langchain]"
+```
+
+Set `OPENAI_API_KEY`, then answer a question using fused text and visual
+retrieval, LangChain orchestration, and validated page citations:
+
+```bash
+sightcite answer paper.pdf \
+  "What is the paper's main experimental result?" \
+  --device cpu \
+  --top-k 3
+```
+
+The command prints the grounded answer and the PDF page numbers supporting it.
+It may download the configured embedding models on first use and makes a
+billable OpenAI API request.
+
+See all configuration options:
+
+```bash
+sightcite answer --help
+```
+
 ## Development
 
 SightCite requires Python 3.11.
