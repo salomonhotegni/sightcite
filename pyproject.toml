@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,24 @@ version = "0.1.0"
 description = "Evidence-grounded visual RAG for scientific papers."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+    "information-retrieval",
+    "multimodal",
+    "rag",
+    "scientific-papers",
+    "visual-question-answering",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 authors = [
     { name = "Sedjro Salomon Hotegni" },
 ]
@@ -21,6 +38,11 @@ dependencies = [
 
 [project.scripts]
 sightcite = "sightcite.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/salomonhotegni/sightcite"
+Repository = "https://github.com/salomonhotegni/sightcite"
+Issues = "https://github.com/salomonhotegni/sightcite/issues"
 
 [project.optional-dependencies]
 langchain = [
@@ -35,6 +57,10 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.11",
+]
+release = [
+    "build>=1.4,<2",
+    "twine>=6.2,<7",
 ]
 
 [tool.setuptools.packages.find]
